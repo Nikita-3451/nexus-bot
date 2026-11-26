@@ -4,3 +4,4 @@
    apscheduler
    flask
    pytz
+   google-generativeai
