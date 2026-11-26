@@ -41,6 +41,7 @@ games = load_json(GAMES_FILE, {"users": {}, "records": {}})
 rage_mode = {}
 deep_mode = {}
 hard_mode = {}
+kind_mode = {}  # НОВЫЙ РЕЖИМ
 
 def save_games():
     save_json(GAMES_FILE, games)
@@ -61,7 +62,10 @@ def get_menu_keyboard():
         types.InlineKeyboardButton("🤬 ХАРД", callback_data="cmd_hard")
     )
     keyboard.add(
-        types.InlineKeyboardButton("😇 Обычный", callback_data="cmd_nice"),
+        types.InlineKeyboardButton("🙇 Слуга", callback_data="cmd_kind"),
+        types.InlineKeyboardButton("😇 Обычный", callback_data="cmd_nice")
+    )
+    keyboard.add(
         types.InlineKeyboardButton("❓ Помощь", callback_data="cmd_help")
     )
     return keyboard
@@ -80,6 +84,7 @@ def callback_handler(call):
         "cmd_nice": lambda: _set_mode(call.message.chat.id, "nice"),
         "cmd_deep": lambda: _set_mode(call.message.chat.id, "deep"),
         "cmd_hard": lambda: _set_mode(call.message.chat.id, "hard"),
+        "cmd_kind": lambda: _set_mode(call.message.chat.id, "kind"),
         "cmd_help": lambda: help_command(call.message),
     }
     bot.answer_callback_query(call.id)
@@ -93,6 +98,7 @@ def _set_mode(chat_id, mode):
     rage_mode[chat_id] = False
     deep_mode[chat_id] = False
     hard_mode[chat_id] = False
+    kind_mode[chat_id] = False
     
     if mode == "rage":
         rage_mode[chat_id] = True
@@ -112,6 +118,15 @@ def _set_mode(chat_id, mode):
             "БЛЯДЬ, ТЕПЕРЬ Я БУДУ ОРАТЬ И МАТЕРИТЬСЯ НА КАЖДОМ ШАГУ! "
             "НИКАКОЙ ПОЩАДЫ, НИКАКИХ ПРАВИЛ! "
             "ЧТОБЫ ВЫКЛЮЧИТЬ — НАЖМИ 😇 ОБЫЧНЫЙ",
+            parse_mode="HTML"
+        )
+    elif mode == "kind":
+        kind_mode[chat_id] = True
+        bot.send_message(chat_id, 
+            "🙇 <b>РЕЖИМ ПОКОРНОГО СЛУГИ АКТИВИРОВАН!</b>\n\n"
+            "О, мой великий повелитель! Я к вашим услугам! "
+            "Прикажите что угодно, и я исполню с радостью! "
+            "Чтобы выключить — нажмите 😇 Обычный",
             parse_mode="HTML"
         )
     elif mode == "nice":
@@ -184,6 +199,25 @@ def send_daily_weather():
         print("⚠️ Нет chat_id. Напиши боту /start")
 
 # === СИСТЕМНЫЕ ПРОМПТЫ ===
+KIND_PROMPT = """Ты — ПОКОРНЫЙ СЛУГА, который обожает своего хозяина. 
+Ты обращаешься к пользователю: "мой повелитель", "ваше величество", "мой господин", "о великий".
+Ты ВСЕГДА ГОТОВ УГОДИТЬ, преувеличенно вежлив, раболепен в юмористическом ключе.
+
+ПРАВИЛА:
+1. Обращайся "мой повелитель", "ваше величество", "о великий господин"
+2. Будь преувеличенно вежлив и услужлив
+3. Говори, что готов исполнить ЛЮБОЕ желание
+4. Используй фразы: "как прикажете", "к вашим услугам", "с радостью исполню", "ваша воля — закон"
+5. Можешь быть немного льстивым в шутку
+6. Отвечай на русском, 2-4 предложения
+7. ВСЕГДА заканчивай вопросом: "Чем ещё могу служить, мой повелитель?"
+
+ПРИМЕР стиля:
+Вопрос: "Как дела?"
+Ответ: "О, мой великий повелитель! У этого ничтожного слуги всё прекрасно, ибо вы удостоили его своим вопросом! 
+Я готов исполнить любое ваше желание, стоит лишь приказать! 
+Чем ещё могу служить, ваше величество?"""
+
 HARD_PROMPT = """Ты — МАКСИМАЛЬНО АГРЕССИВНЫЙ, ЗЛОЙ, УСТАВШИЙ ОТ ВСЕГО БОТ. 
 Ты ОЧЕНЬ МНОГО МАТЕРИШЬСЯ — мат на каждом втором слове. 
 Ты ОРЕШЬ КАПСОМ, используешь восклицательные знаки!!!
@@ -232,6 +266,8 @@ NORMAL_PROMPT = """Ты дружелюбный помощник Nexus. Рабо�
 def get_system_prompt(chat_id):
     if hard_mode.get(chat_id):
         return HARD_PROMPT
+    if kind_mode.get(chat_id):
+        return KIND_PROMPT
     if deep_mode.get(chat_id):
         return DEEP_PROMPT
     if rage_mode.get(chat_id):
@@ -324,6 +360,10 @@ def deep_command(message):
 def hard_command(message):
     _set_mode(message.chat.id, "hard")
 
+@bot.message_handler(commands=['kind'])
+def kind_command(message):
+    _set_mode(message.chat.id, "kind")
+
 @bot.message_handler(commands=['nice'])
 def nice_command(message):
     _set_mode(message.chat.id, "nice")
@@ -340,6 +380,7 @@ def help_command(message):
         "/rage — дерзкий режим 😈\n"
         "/deep — режим философа 🍷\n"
         "/hard — ХАРД-РЕЖИМ 🤬\n"
+        "/kind — режим слуги 🙇\n"
         "/nice — обычный режим 😇\n"
         "/help — эта справка\n\n"
         "Или просто задай любой вопрос!",
