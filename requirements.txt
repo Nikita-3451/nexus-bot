@@ -4,4 +4,4 @@
    apscheduler
    flask
    pytz
-   google-generativeai
+   huggingface_hub
