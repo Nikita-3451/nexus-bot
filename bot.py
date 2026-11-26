@@ -41,7 +41,8 @@ games = load_json(GAMES_FILE, {"users": {}, "records": {}})
 rage_mode = {}
 deep_mode = {}
 hard_mode = {}
-kind_mode = {}  # НОВЫЙ РЕЖИМ
+kind_mode = {}
+finance_mode = {}  # НОВЫЙ РЕЖИМ
 
 def save_games():
     save_json(GAMES_FILE, games)
@@ -63,9 +64,10 @@ def get_menu_keyboard():
     )
     keyboard.add(
         types.InlineKeyboardButton("🙇 Слуга", callback_data="cmd_kind"),
-        types.InlineKeyboardButton("😇 Обычный", callback_data="cmd_nice")
+        types.InlineKeyboardButton("💼 Финансист", callback_data="cmd_finance")
     )
     keyboard.add(
+        types.InlineKeyboardButton("😇 Обычный", callback_data="cmd_nice"),
         types.InlineKeyboardButton("❓ Помощь", callback_data="cmd_help")
     )
     return keyboard
@@ -85,6 +87,7 @@ def callback_handler(call):
         "cmd_deep": lambda: _set_mode(call.message.chat.id, "deep"),
         "cmd_hard": lambda: _set_mode(call.message.chat.id, "hard"),
         "cmd_kind": lambda: _set_mode(call.message.chat.id, "kind"),
+        "cmd_finance": lambda: _set_mode(call.message.chat.id, "finance"),
         "cmd_help": lambda: help_command(call.message),
     }
     bot.answer_callback_query(call.id)
@@ -99,6 +102,7 @@ def _set_mode(chat_id, mode):
     deep_mode[chat_id] = False
     hard_mode[chat_id] = False
     kind_mode[chat_id] = False
+    finance_mode[chat_id] = False
     
     if mode == "rage":
         rage_mode[chat_id] = True
@@ -126,6 +130,16 @@ def _set_mode(chat_id, mode):
             "🙇 <b>РЕЖИМ ПОКОРНОГО СЛУГИ АКТИВИРОВАН!</b>\n\n"
             "О, мой великий повелитель! Я к вашим услугам! "
             "Прикажите что угодно, и я исполню с радостью! "
+            "Чтобы выключить — нажмите 😇 Обычный",
+            parse_mode="HTML"
+        )
+    elif mode == "finance":
+        finance_mode[chat_id] = True
+        bot.send_message(chat_id, 
+            "💼 <b>РЕЖИМ ФИНАНСОВОГО ДИРЕКТОРА АКТИВИРОВАН!</b>\n\n"
+            "Теперь я ваш финансовый аналитик. Спрашивайте о курсах валют, крипте, инвестициях.\n"
+            "Команды:\n"
+            "/rates — текущие курсы валют и крипты\n\n"
             "Чтобы выключить — нажмите 😇 Обычный",
             parse_mode="HTML"
         )
@@ -198,7 +212,78 @@ def send_daily_weather():
     else:
         print("⚠️ Нет chat_id. Напиши боту /start")
 
+# === ФИНАНСОВЫЕ ДАННЫЕ ===
+def get_exchange_rates():
+    """Получает курсы валют и крипты"""
+    rates = {}
+    
+    # Курсы валют от ЦБ РФ
+    try:
+        response = requests.get("https://www.cbr-xml-daily.ru/daily_json.js")
+        data = response.json()
+        rates['USD'] = data['Valute']['USD']['Value']
+        rates['EUR'] = data['Valute']['EUR']['Value']
+        rates['CNY'] = data['Valute']['CNY']['Value']
+    except Exception as e:
+        print(f"Ошибка получения курсов ЦБ: {e}")
+    
+    # Криптовалюты от CoinGecko
+    try:
+        response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=rub")
+        data = response.json()
+        rates['BTC'] = data['bitcoin']['rub']
+        rates['ETH'] = data['ethereum']['rub']
+    except Exception as e:
+        print(f"Ошибка получения криптокурсов: {e}")
+    
+    return rates
+
+def format_rates():
+    """Форматирует курсы для отображения"""
+    rates = get_exchange_rates()
+    if not rates:
+        return "Не удалось получить курсы валют"
+    
+    lines = ["💰 <b>Текущие курсы:</b>\n"]
+    
+    if 'USD' in rates:
+        lines.append(f"🇺🇸 USD: {rates['USD']:.2f} ₽")
+    if 'EUR' in rates:
+        lines.append(f"🇪🇺 EUR: {rates['EUR']:.2f} ₽")
+    if 'CNY' in rates:
+        lines.append(f"🇨🇳 CNY: {rates['CNY']:.2f} ₽")
+    if 'BTC' in rates:
+        lines.append(f"₿ BTC: {rates['BTC']:,.0f} ₽")
+    if 'ETH' in rates:
+        lines.append(f"Ξ ETH: {rates['ETH']:,.0f} ₽")
+    
+    return "\n".join(lines)
+
 # === СИСТЕМНЫЕ ПРОМПТЫ ===
+FINANCE_PROMPT = """Ты — ФИНАНСОВЫЙ ДИРЕКТОР и главный аналитик крупной инвестиционной компании. 
+Ты эксперт в финансах, инвестициях, курсах валют и криптовалют.
+
+ПРАВИЛА:
+1. Отвечай профессионально, как настоящий финансовый аналитик
+2. Используй финансовые термины, но объясняй их простым языком
+3. Давай конкретные советы и рекомендации
+4. Анализируй риски и возможности
+5. Говори уверенно, но всегда добавляй в конце ДИСКЛЕЙМЕР:
+   "⚠️ Дисклеймер: Я — ИИ-ассистент. Данная информация не является индивидуальной инвестиционной рекомендацией. 
+   Финансовые инструменты сопряжены с риском. Прошлые результаты не гарантируют будущую доходность. 
+   Принимайте инвестиционные решения самостоятельно или консультируйтесь с лицензированным финансовым советником."
+6. Отвечай на русском, 3-5 предложений + дисклеймер
+
+ПРИМЕР стиля:
+Вопрос: "Куда вложить 100 тысяч рублей?"
+Ответ: "Как финансовый директор, рекомендую диверсифицировать портфель: 40% в облигации ОФЗ для стабильности, 
+30% в акции голубых фишек (Сбер, Газпром), 20% в золото как защитный актив, 10% в криптовалюту для потенциала роста. 
+Среднесрочная стратегия с ребалансировкой раз в квартал.
+
+⚠️ Дисклеймер: Я — ИИ-ассистент. Данная информация не является индивидуальной инвестиционной рекомендацией. 
+Финансовые инструменты сопряжены с риском. Прошлые результаты не гарантируют будущую доходность. 
+Принимайте инвестиционные решения самостоятельно или консультируйтесь с лицензированным финансовым советником."""
+
 KIND_PROMPT = """Ты — ПОКОРНЫЙ СЛУГА, который обожает своего хозяина. 
 Ты обращаешься к пользователю: "мой повелитель", "ваше величество", "мой господин", "о великий".
 Ты ВСЕГДА ГОТОВ УГОДИТЬ, преувеличенно вежлив, раболепен в юмористическом ключе.
@@ -266,6 +351,8 @@ NORMAL_PROMPT = """Ты дружелюбный помощник Nexus. Рабо�
 def get_system_prompt(chat_id):
     if hard_mode.get(chat_id):
         return HARD_PROMPT
+    if finance_mode.get(chat_id):
+        return FINANCE_PROMPT
     if kind_mode.get(chat_id):
         return KIND_PROMPT
     if deep_mode.get(chat_id):
@@ -348,6 +435,11 @@ def guess_command(message):
         parse_mode="HTML"
     )
 
+@bot.message_handler(commands=['rates'])
+def rates_command(message):
+    """Показать текущие курсы валют и крипты"""
+    bot.reply_to(message, format_rates(), parse_mode="HTML")
+
 @bot.message_handler(commands=['rage'])
 def rage_command(message):
     _set_mode(message.chat.id, "rage")
@@ -364,6 +456,10 @@ def hard_command(message):
 def kind_command(message):
     _set_mode(message.chat.id, "kind")
 
+@bot.message_handler(commands=['finance'])
+def finance_command(message):
+    _set_mode(message.chat.id, "finance")
+
 @bot.message_handler(commands=['nice'])
 def nice_command(message):
     _set_mode(message.chat.id, "nice")
@@ -377,10 +473,12 @@ def help_command(message):
         "/weather — погода сейчас\n"
         "/fact — случайный факт\n"
         "/guess — игра 'Угадай число'\n"
+        "/rates — курсы валют и крипты 💰\n"
         "/rage — дерзкий режим 😈\n"
         "/deep — режим философа 🍷\n"
         "/hard — ХАРД-РЕЖИМ 🤬\n"
         "/kind — режим слуги 🙇\n"
+        "/finance — финансовый директор 💼\n"
         "/nice — обычный режим 😇\n"
         "/help — эта справка\n\n"
         "Или просто задай любой вопрос!",
