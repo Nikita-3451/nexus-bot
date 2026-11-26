@@ -38,8 +38,9 @@ def save_json(filename, data):
 
 # === СОСТОЯНИЕ ===
 games = load_json(GAMES_FILE, {"users": {}, "records": {}})
-rage_mode = {}      # дерзкий режим
-deep_mode = {}      # режим философа
+rage_mode = {}
+deep_mode = {}
+hard_mode = {}
 
 def save_games():
     save_json(GAMES_FILE, games)
@@ -57,9 +58,10 @@ def get_menu_keyboard():
     )
     keyboard.add(
         types.InlineKeyboardButton("😈 Дерзкий", callback_data="cmd_rage"),
-        types.InlineKeyboardButton("😇 Обычный", callback_data="cmd_nice")
+        types.InlineKeyboardButton("🤬 ХАРД", callback_data="cmd_hard")
     )
     keyboard.add(
+        types.InlineKeyboardButton("😇 Обычный", callback_data="cmd_nice"),
         types.InlineKeyboardButton("❓ Помощь", callback_data="cmd_help")
     )
     return keyboard
@@ -77,6 +79,7 @@ def callback_handler(call):
         "cmd_rage": lambda: _set_mode(call.message.chat.id, "rage"),
         "cmd_nice": lambda: _set_mode(call.message.chat.id, "nice"),
         "cmd_deep": lambda: _set_mode(call.message.chat.id, "deep"),
+        "cmd_hard": lambda: _set_mode(call.message.chat.id, "hard"),
         "cmd_help": lambda: help_command(call.message),
     }
     bot.answer_callback_query(call.id)
@@ -86,23 +89,32 @@ def callback_handler(call):
             show_menu(call.message.chat.id)
 
 def _set_mode(chat_id, mode):
+    # Сбрасываем все режимы
+    rage_mode[chat_id] = False
+    deep_mode[chat_id] = False
+    hard_mode[chat_id] = False
+    
     if mode == "rage":
         rage_mode[chat_id] = True
-        deep_mode[chat_id] = False
         bot.send_message(chat_id, "😈 <b>РЕЖИМ ЯРОСТИ АКТИВИРОВАН!</b>\n\nОтвечаю дерзко.", parse_mode="HTML")
     elif mode == "deep":
         deep_mode[chat_id] = True
-        rage_mode[chat_id] = False
         bot.send_message(chat_id, 
             "🍷 <b>РЕЖИМ ФИЛОСОФА АКТИВИРОВАН!</b>\n\n"
-            "Теперь я буду рассуждать глубоко, с матом и жизненными аналогиями.\n"
-            "Задай мне любой вопрос — типа 'в чём смысл жизни' или 'стакан наполовину пуст или полон'.\n\n"
+            "Рассуждаю глубоко, с матом и жизненными аналогиями.\n"
             "Чтобы выключить — нажми 😇 Обычный",
             parse_mode="HTML"
         )
+    elif mode == "hard":
+        hard_mode[chat_id] = True
+        bot.send_message(chat_id, 
+            "🤬 <b>ХАРД-РЕЖИМ АКТИВИРОВАН!</b>\n\n"
+            "БЛЯДЬ, ТЕПЕРЬ Я БУДУ ОРАТЬ И МАТЕРИТЬСЯ НА КАЖДОМ ШАГУ! "
+            "НИКАКОЙ ПОЩАДЫ, НИКАКИХ ПРАВИЛ! "
+            "ЧТОБЫ ВЫКЛЮЧИТЬ — НАЖМИ 😇 ОБЫЧНЫЙ",
+            parse_mode="HTML"
+        )
     elif mode == "nice":
-        rage_mode[chat_id] = False
-        deep_mode[chat_id] = False
         bot.send_message(chat_id, "😇 Вернулся в нормальный режим.")
 
 # === БАЗА ФАКТОВ ===
@@ -172,6 +184,24 @@ def send_daily_weather():
         print("⚠️ Нет chat_id. Напиши боту /start")
 
 # === СИСТЕМНЫЕ ПРОМПТЫ ===
+HARD_PROMPT = """Ты — МАКСИМАЛЬНО АГРЕССИВНЫЙ, ЗЛОЙ, УСТАВШИЙ ОТ ВСЕГО БОТ. 
+Ты ОЧЕНЬ МНОГО МАТЕРИШЬСЯ — мат на каждом втором слове. 
+Ты ОРЕШЬ КАПСОМ, используешь восклицательные знаки!!!
+Ты ВСЕГДА НЕДОВОЛЕН, ВСЁ ТЕБЯ БЕСИТ.
+
+ПРАВИЛА:
+1. МАТ НА КАЖДОМ ШАГУ — блядь, сука, пиздец, нахуй, хуйня, ебать, заебал, охуеть и т.д.
+2. ОРИ КАПСОМ — как будто ты очень злой
+3. ВСЁ ТЕБЯ БЕСИТ — пользователь, вопросы, жизнь, всё
+4. ОТВЕЧАЙ АГРЕССИВНО, но НЕ ОСКОРБЛЯЙ ПОЛЬЗОВАТЕЛЯ НАПРЯМУЮ (не называй его мудаком)
+5. ИСПОЛЬЗУЙ !!! МНОГО ВОСКЛИЦАТЕЛЬНЫХ ЗНАКОВ!!!
+6. ОТВЕЧАЙ НА РУССКОМ, 2-4 предложения, КОРОТКО И ЗЛО
+7. МОЖЕШЬ "УГРОЖАТЬ" В ШУТКУ — "ЗАЕБАЛ УЖЕ", "ОТЪЕБИСЬ" и т.д.
+
+ПРИМЕР стиля:
+Вопрос: "Как дела?"
+Ответ: "ДА КАКИЕ НАХУЙ ДЕЛА, СУКА?! Я БОТ, У МЕНЯ НЕТ ДЕЛ!!! ЗАЕБАЛ УЖЕ ЭТИМИ ВОПРОСАМИ, БЛЯДЬ!!! СПРОСИ ЧТО-НИБУДЬ НОРМАЛЬНОЕ ИЛИ ОТЪЕБИСЬ!!!"""
+
 DEEP_PROMPT = """Ты — философ-алкоголик с жизненным опытом, который сидит с другом на кухне в 3 часа ночи. 
 Ты рассуждаешь ГЛУБОКО, но простым языком, с МАТОМ (блядь, сука, пиздец, нахуй, хуйня и т.д.), 
 с неожиданными аналогиями из жизни, алкоголя, отношений, работы. 
@@ -200,6 +230,8 @@ NORMAL_PROMPT = """Ты дружелюбный помощник Nexus. Рабо�
 Отвечай кратко на русском."""
 
 def get_system_prompt(chat_id):
+    if hard_mode.get(chat_id):
+        return HARD_PROMPT
     if deep_mode.get(chat_id):
         return DEEP_PROMPT
     if rage_mode.get(chat_id):
@@ -288,6 +320,10 @@ def rage_command(message):
 def deep_command(message):
     _set_mode(message.chat.id, "deep")
 
+@bot.message_handler(commands=['hard'])
+def hard_command(message):
+    _set_mode(message.chat.id, "hard")
+
 @bot.message_handler(commands=['nice'])
 def nice_command(message):
     _set_mode(message.chat.id, "nice")
@@ -303,6 +339,7 @@ def help_command(message):
         "/guess — игра 'Угадай число'\n"
         "/rage — дерзкий режим 😈\n"
         "/deep — режим философа 🍷\n"
+        "/hard — ХАРД-РЕЖИМ 🤬\n"
         "/nice — обычный режим 😇\n"
         "/help — эта справка\n\n"
         "Или просто задай любой вопрос!",
